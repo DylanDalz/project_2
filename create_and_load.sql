@@ -176,7 +176,7 @@ ALTER TABLE Preliminary ALTER COLUMN tract_to_msamd_income TYPE NUMERIC USING NU
 ALTER TABLE Preliminary ALTER COLUMN number_of_owner_occupied_units TYPE INTEGER USING NULLIF(number_of_owner_occupied_units, '')::INTEGER;
 ALTER TABLE Preliminary ALTER COLUMN number_of_1_to_4_family_units TYPE INTEGER USING NULLIF(number_of_1_to_4_family_units, '')::INTEGER;
 
--- No data present in this column, keep it as text
-ALTER TABLE Preliminary ALTER COLUMN application_date_indicator TYPE TEXT USING NULLIF(application_date_indicator, '')::TEXT;
+-- Put as integer.
+ALTER TABLE Preliminary ALTER COLUMN application_date_indicator TYPE INTEGER USING NULLIF(application_date_indicator, '')::INTEGER;
 
 ALTER TABLE Preliminary ADD PRIMARY KEY (sequence_number);
