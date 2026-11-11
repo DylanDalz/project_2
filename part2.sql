@@ -355,8 +355,12 @@ CREATE TABLE Location (
     FOREIGN KEY (state_code) REFERENCES State(state_code)
 );
 
--- Application Parent Table
+-- Insert distinct locations based off the preliminary's data
+INSERT INTO Location (census_tract_number, population, minority_population, tract_to_msamd_income, number_of_owner_occupied_units, number_of_1_to_4_family_units, hud_median_family_income, msamd, county_code, state_code)
+SELECT DISTINCT census_tract_number, population, minority_population, tract_to_msamd_income, number_of_owner_occupied_units, number_of_1_to_4_family_units, hud_median_family_income, msamd, county_code, state_code
+FROM preliminary;
 
+-- Application table that holds each mortgage application's information
 CREATE TABLE Application (
     sequence_number INT PRIMARY KEY,
     as_of_year INT,
@@ -373,8 +377,12 @@ CREATE TABLE Application (
     FOREIGN KEY (respondent_id) REFERENCES Lender(respondent_id)
 );
 
--- Co Applicant Parent Table
+-- Insert every application from preliminary's data
+INSERT INTO Application (sequence_number, as_of_year, application_date_indicator, edit_status, preapproval, action_taken, purchaser_type, respondent_id)
+SELECT sequence_number, as_of_year, application_date_indicator, edit_status, preapproval, action_taken, purchaser_type, respondent_id
+FROM preliminary;
 
+-- Co Applicant table that holds every co-applicant's information from the application
 CREATE TABLE Co_Applicant (
     sequence_number INT,
     co_applicant_ethnicity INT,
@@ -385,8 +393,13 @@ CREATE TABLE Co_Applicant (
     FOREIGN KEY (co_applicant_sex) REFERENCES Co_Applicant_Sex(co_applicant_sex)
 );
 
--- Applicant Parent Table
+-- Insert every co-applicant from preliminary's data
+INSERT INTO Co_Applicant (sequence_number, co_applicant_ethnicity, co_applicant_sex)
+SELECT sequence_number, co_applicant_ethnicity, co_applicant_sex
+FROM preliminary;
 
+
+-- Applicant table that holds every applicant's information from the application
 CREATE TABLE Applicant (
     sequence_number INT PRIMARY KEY,
     applicant_income_000s INT,
@@ -397,8 +410,12 @@ CREATE TABLE Applicant (
     FOREIGN KEY (applicant_ethnicity) REFERENCES Applicant_Ethnicity(applicant_ethnicity)
 );
 
--- Loan_Terms Parent Table
+-- Insert every applicant from preliminary's data
+INSERT INTO Applicant (sequence_number, applicant_income_000s, applicant_sex, applicant_ethnicity)
+SELECT sequence_number, applicant_income_000s, applicant_sex, applicant_ethnicity
+FROM preliminary;
 
+-- Loan_Terms Parent Table
 CREATE TABLE Loan_Terms (
     sequence_number INT PRIMARY KEY,
     loan_amount_000s INT,
@@ -409,8 +426,12 @@ CREATE TABLE Loan_Terms (
     FOREIGN KEY (loan_purpose) REFERENCES Loan_Purpose(loan_purpose)
 );
 
--- Compliance Parent Table
+-- Insert every mortgage application's loan terms from preliminary
+INSERT INTO Loan_Terms (sequence_number, loan_amount_000s, loan_type, loan_purpose)
+SELECT sequence_number, loan_amount_000s, loan_type, loan_purpose
+FROM preliminary;
 
+-- Compliance Parent Table
 CREATE TABLE Compliance (
     sequence_number INT PRIMARY KEY,
     rate_spread NUMERIC,
@@ -421,8 +442,12 @@ CREATE TABLE Compliance (
     FOREIGN KEY (hoepa_status) REFERENCES Hoepa_Status(hoepa_status)
 );
 
--- Property Parent Table
+-- Insert every mortgage application's compliance details from preliminary
+INSERT INTO Compliance (sequence_number, rate_spread, lien_status, hoepa_status)
+SELECT sequence_number, rate_spread, lien_status, hoepa_status
+FROM preliminary;
 
+-- Property Parent Table
 CREATE TABLE Property (
     sequence_number INT PRIMARY KEY,
     property_type INT,
@@ -434,8 +459,39 @@ CREATE TABLE Property (
     FOREIGN KEY (locationID) REFERENCES Location(locationID)
 );
 
+-- Insert every mortgage application's property details from preliminary, while also matching its new respective locationID based an application's exact location details
+-- This query joins the preliminary table with the location table based on a concatenated string of location details to ensure matching of each mortgage application's location details
+-- CONCAT() is needed, because our usual INSERT statements will invoke an timeout error with all these attributes
+INSERT INTO Property (sequence_number, property_type, owner_occupancy, locationID)
+SELECT sequence_number, property_type, owner_occupancy, location.locationID
+FROM preliminary
+JOIN location ON
+CONCAT(
+        COALESCE(preliminary.census_tract_number::text, ''), '|',
+        COALESCE(preliminary.state_code::text, ''), '|',
+        COALESCE(preliminary.county_code::text, ''), '|',
+        COALESCE(preliminary.msamd::text, ''), '|',
+        COALESCE(preliminary.population::text, ''), '|',
+        COALESCE(preliminary.minority_population::text, ''), '|',
+        COALESCE(preliminary.tract_to_msamd_income::text, ''), '|',
+        COALESCE(preliminary.number_of_owner_occupied_units::text, ''), '|',
+        COALESCE(preliminary.number_of_1_to_4_family_units::text, ''), '|',
+        COALESCE(preliminary.hud_median_family_income::text, '')
+     ) = 
+CONCAT(
+        COALESCE(location.census_tract_number::text, ''), '|',
+        COALESCE(location.state_code::text, ''), '|',
+        COALESCE(location.county_code::text, ''), '|',
+        COALESCE(location.msamd::text, ''), '|',
+        COALESCE(location.population::text, ''), '|',
+        COALESCE(location.minority_population::text, ''), '|',
+        COALESCE(location.tract_to_msamd_income::text, ''), '|',
+        COALESCE(location.number_of_owner_occupied_units::text, ''), '|',
+        COALESCE(location.number_of_1_to_4_family_units::text, ''), '|',
+        COALESCE(location.hud_median_family_income::text, '')
+     );
+
 -- Co_Applicant_Race relationship table
--- A reminder that we condensed race 1 to 5 down into just co_applicant_race.
 CREATE TABLE Co_Applicant_Race (
     sequence_number INT,
     co_applicant_race INT,
@@ -444,6 +500,18 @@ CREATE TABLE Co_Applicant_Race (
     FOREIGN KEY (co_applicant_race) REFERENCES Co_Applicant_Race_Name(co_applicant_race),
     FOREIGN KEY (sequence_number) REFERENCES Co_Applicant(sequence_number)
 );
+
+-- Insert every race each co-applicant has from the preliminary table
+INSERT INTO Co_Applicant_Race (sequence_number, co_applicant_race, co_applicant_race_number)
+SELECT sequence_number, co_applicant_race_1, 1 FROM preliminary WHERE co_applicant_race_1 IS NOT NULL
+UNION ALL
+SELECT sequence_number, co_applicant_race_2, 2 FROM preliminary WHERE co_applicant_race_2 IS NOT NULL
+UNION ALL
+SELECT sequence_number, co_applicant_race_3, 3 FROM preliminary WHERE co_applicant_race_3 IS NOT NULL
+UNION ALL
+SELECT sequence_number, co_applicant_race_4, 4 FROM preliminary WHERE co_applicant_race_4 IS NOT NULL
+UNION ALL
+SELECT sequence_number, co_applicant_race_5, 5 FROM preliminary WHERE co_applicant_race_5 IS NOT NULL;
 
 -- Applicant_Race relationship table
 CREATE TABLE Applicant_Race (
@@ -455,6 +523,18 @@ CREATE TABLE Applicant_Race (
     FOREIGN KEY (sequence_number) REFERENCES Applicant(sequence_number)
 );
 
+-- Insert every race each applicant has from the preliminary table
+INSERT INTO Applicant_Race (sequence_number, applicant_race, applicant_race_number)
+SELECT sequence_number, applicant_race_1, 1 FROM preliminary WHERE applicant_race_1 IS NOT NULL
+UNION ALL
+SELECT sequence_number, applicant_race_2, 2 FROM preliminary WHERE applicant_race_2 IS NOT NULL
+UNION ALL
+SELECT sequence_number, applicant_race_3, 3 FROM preliminary WHERE applicant_race_3 IS NOT NULL
+UNION ALL
+SELECT sequence_number, applicant_race_4, 4 FROM preliminary WHERE applicant_race_4 IS NOT NULL
+UNION ALL
+SELECT sequence_number, applicant_race_5, 5 FROM preliminary WHERE applicant_race_5 IS NOT NULL;
+
 -- Denial_Reason relationship table
 CREATE TABLE Denial_Reason (
     sequence_number INT,
@@ -464,3 +544,11 @@ CREATE TABLE Denial_Reason (
     FOREIGN KEY (sequence_number) REFERENCES Application(sequence_number),
     FOREIGN KEY (denial_reason) REFERENCES Denial_Reason_Name(denial_reason)
 );
+
+-- Insert every denial reason each application has from the preliminary table
+INSERT INTO Denial_Reason (sequence_number, denial_reason, denial_reason_number)
+SELECT sequence_number, denial_reason_1, 1 FROM preliminary WHERE denial_reason_1 IS NOT NULL
+UNION ALL
+SELECT sequence_number, denial_reason_2, 2 FROM preliminary WHERE denial_reason_2 IS NOT NULL
+UNION ALL
+SELECT sequence_number, denial_reason_3, 3 FROM preliminary WHERE denial_reason_3 IS NOT NULL;
