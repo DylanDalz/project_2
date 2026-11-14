@@ -14,8 +14,8 @@ CASCADE;
 
 -- Edit status code to name lookup table, but it will be all NULL like in the original CSV
 CREATE TABLE Edit_Status (
-    edit_status INT UNIQUE,
-    edit_status_name TEXT
+    edit_status INT UNIQUE CHECK (edit_status IS NULL),
+    edit_status_name TEXT CHECK (edit_status_name IS NULL)
 );
 
 -- Insert NULL into edit status code and name as they are all NULL in the original CSV
